@@ -35,6 +35,8 @@ History Project.
 library(tidyverse)
 library(rvest)
 library(janitor)
+library(rvest)
+library(lubridate)
 ```
 
 ## Scrape data
@@ -49,7 +51,12 @@ object named `tor_1998`. Hint: make use of selector gadget and
 </div>
 
 ```{r tornadoes_1998}
+html_tornado <- read_html("http://www.tornadohistoryproject.com/tornado/Oklahoma/1998/table")
 
+tor_1998 <- html_tornado %>%
+  html_nodes("#results") %>%
+  html_table(header = TRUE) %>%
+  .[[1]]
 ```
 
 #### Step 2
@@ -61,7 +68,10 @@ variable names with `janitor::clean_names()`, and only keep columns
 </div>
 
 ```{r clean_tornadoes}
-
+tor_1998 <- tor_1998 %>%
+  clean_names() %>%
+  filter(e != "E") %>%
+  select(spc_number:lift_lon)
 ```
 
 #### Step 3
@@ -75,6 +85,24 @@ function should be able to scrape the tornado data for any year from 1998 to
 
 ```{r get_tornadoes}
 
+get_tornadoes <- function(year) {
+  base_url <- "http://www.tornadohistoryproject.com/tornado/"
+  url <- str_c(base_url, year, "/table")
+  
+  html_tornado <- read_html(url)
+  
+  tor <- html_tornado %>%
+  html_nodes("#results") %>%
+  html_table(header = TRUE) %>%
+  .[[1]] %>%
+  clean_names() %>%
+  filter(e != "E") %>%
+  select(spc_number:lift_lon)
+  
+  return(tor)
+}
+
+get_year(2001)
 ```
 
 #### Step 4
@@ -86,7 +114,12 @@ result in a single data frame. Name the resulting data frame `ok_tornadoes`.
 </div>
 
 ```{r get_all_tornadoes}
+years <- c(1998:2017)
 
+ok_tornadoes <- map_dfr(years, get_tornadoes)
+
+ok_tornadoes <- ok_tornadoes %>%
+  filter(state_s == "Oklahoma")
 ```
 
 ## Visualize data
@@ -97,6 +130,25 @@ clean up the variables as there are special characters in the data. For example,
 `fujita` has some `?` present.
 </div>
 
+```{r}
+# Clean data 
+
+ok <- ok_tornadoes %>%
+  separate(affected_counties, into = c("affected_county_1", "affected_county_2", "affected_county_3"), sep = ",") %>%
+  mutate(date = as.POSIXct(date), 
+         width = as.numeric(width), 
+         length = as.numeric(length))  %>%
+  mutate(year = year(date))
+
+# plots 
+
+ggplot(ok, aes(factor(year), length)) +
+  geom_boxplot() 
+
+ggplot(ok, aes(width, length)) +
+  geom_point()
+
+```
 
 
 ## References
